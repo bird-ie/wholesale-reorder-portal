@@ -136,4 +136,78 @@ class WRP_CSV_Handler {
 			'errors' => $errors,
 		);
 	}
+
+	/**
+	 * Save a template to the user's meta.
+	 *
+	 * @param int    $user_id The user ID.
+	 * @param string $name    The template name.
+	 * @param array  $rows    The validated rows.
+	 * @return bool True on success, false on failure.
+	 */
+	public static function save_template( $user_id, $name, $rows ) {
+		$templates = self::get_templates( $user_id );
+
+		// Limit to 10 templates per user
+		if ( count( $templates ) >= 10 ) {
+			return false;
+		}
+
+		$template_id = uniqid( 'wrp_tpl_' );
+
+		$templates[ $template_id ] = array(
+			'id'         => $template_id,
+			'name'       => sanitize_text_field( $name ),
+			'created_at' => current_time( 'mysql' ),
+			'items'      => array(),
+		);
+
+		foreach ( $rows as $row ) {
+			if ( 'valid' === $row['status'] ) {
+				$templates[ $template_id ]['items'][] = array(
+					'sku'      => sanitize_text_field( $row['sku'] ),
+					'quantity' => absint( $row['quantity'] ),
+				);
+			}
+		}
+
+		update_user_meta( $user_id, '_wrp_saved_templates', $templates );
+
+		return true;
+	}
+
+	/**
+	 * Get all templates for a user.
+	 *
+	 * @param int $user_id The user ID.
+	 * @return array Array of templates.
+	 */
+	public static function get_templates( $user_id ) {
+		$templates = get_user_meta( $user_id, '_wrp_saved_templates', true );
+
+		if ( ! is_array( $templates ) ) {
+			$templates = array();
+		}
+
+		return $templates;
+	}
+
+	/**
+	 * Delete a template.
+	 *
+	 * @param int    $user_id     The user ID.
+	 * @param string $template_id The template ID.
+	 * @return bool True on success, false on failure.
+	 */
+	public static function delete_template( $user_id, $template_id ) {
+		$templates = self::get_templates( $user_id );
+
+		if ( isset( $templates[ $template_id ] ) ) {
+			unset( $templates[ $template_id ] );
+			update_user_meta( $user_id, '_wrp_saved_templates', $templates );
+			return true;
+		}
+
+		return false;
+	}
 }

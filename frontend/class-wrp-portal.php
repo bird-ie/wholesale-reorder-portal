@@ -11,6 +11,12 @@ class WRP_Portal {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_scripts' ) );
 		add_action( 'wp_ajax_wrp_upload_csv', array( __CLASS__, 'ajax_upload_csv' ) );
 		add_action( 'wp_ajax_wrp_add_to_cart', array( __CLASS__, 'ajax_add_to_cart' ) );
+		add_action( 'wp_ajax_wrp_save_template', array( __CLASS__, 'ajax_save_template' ) );
+		add_action( 'wp_ajax_wrp_delete_template', array( __CLASS__, 'ajax_delete_template' ) );
+		add_action( 'wp_ajax_wrp_reorder_template', array( __CLASS__, 'ajax_reorder_template' ) );
+		
+		// Custom login handlers
+		add_action( 'wp_ajax_nopriv_wrp_custom_login', array( __CLASS__, 'ajax_custom_login' ) );
 	}
 
 	public static function enqueue_scripts() {
@@ -43,9 +49,44 @@ class WRP_Portal {
 	}
 
 	public static function render_portal() {
-		if ( ! is_user_logged_in() || ! current_user_can( 'wrp_access_reorder_portal' ) ) {
-			return '<p>You do not have permission to access this portal. Please log in as a Wholesale Buyer.</p>';
+		// If not logged in, show a custom login form
+		if ( ! is_user_logged_in() ) {
+			ob_start();
+			?>
+			<div class="wrp-portal">
+				<div class="wrp-login-box">
+					<h2>Wholesale Portal Login</h2>
+					<p>Please log in to access your wholesale reorder portal.</p>
+					
+					<form id="wrp-login-form">
+						<div class="wrp-form-group">
+							<label for="wrp_username">Username or Email</label>
+							<input type="text" id="wrp_username" name="username" required />
+						</div>
+						<div class="wrp-form-group">
+							<label for="wrp_password">Password</label>
+							<input type="password" id="wrp_password" name="password" required />
+						</div>
+						<button type="submit" class="wrp-btn-primary" style="width: 100%;">Log In</button>
+						<div id="wrp-login-message" style="margin-top: 10px; font-weight: bold;"></div>
+					</form>
+				</div>
+			</div>
+			<?php
+			return ob_get_clean();
 		}
+
+		// If logged in but not a wholesale buyer, show access denied
+		if ( ! current_user_can( 'wrp_access_reorder_portal' ) ) {
+			$message = '<div class="wrp-notice wrp-notice-error" style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 15px; border-radius: 8px; margin-bottom: 20px;">';
+			$message .= '<strong>Access Denied.</strong><br>';
+			$message .= 'Your account does not have Wholesale Buyer permissions. Please contact the store administrator to upgrade your account.';
+			$message .= '</div>';
+			return $message;
+		}
+
+		$user_id = get_current_user_id();
+		$templates = WRP_CSV_Handler::get_templates( $user_id );
 
 		ob_start();
 		?>
@@ -73,12 +114,75 @@ class WRP_Portal {
 					</thead>
 					<tbody></tbody>
 				</table>
-				<button type="button" id="wrp-add-to-cart-btn" class="wrp-btn-success" style="display:none;">Add All to Cart</button>
-				<div id="wrp-cart-message"></div>
+				<div style="margin-top: 15px;">
+					<button type="button" id="wrp-add-to-cart-btn" class="wrp-btn-success">Add All to Cart</button>
+					<button type="button" id="wrp-save-template-btn" class="wrp-btn-secondary" style="margin-left: 10px;">Save as Template</button>
+				</div>
+				<div id="wrp-cart-message" style="margin-top: 10px; font-weight: bold;"></div>
 			</div>
+
+			<!-- Template Save Modal -->
+			<div id="wrp-save-template-modal" class="wrp-modal" style="display:none;">
+				<div class="wrp-modal-content">
+					<h3>Save as Template</h3>
+					<p>Give your template a name (e.g., "Weekly Order - Restaurant").</p>
+					<input type="text" id="wrp-template-name" class="wrp-input" placeholder="Template name" />
+					<div style="margin-top: 15px;">
+						<button type="button" id="wrp-confirm-save-template" class="wrp-btn-primary">Save Template</button>
+						<button type="button" id="wrp-cancel-save-template" class="wrp-btn-secondary">Cancel</button>
+					</div>
+					<div id="wrp-template-save-message" style="margin-top: 10px;"></div>
+				</div>
+			</div>
+
+			<!-- Saved Templates -->
+			<?php if ( ! empty( $templates ) ) : ?>
+				<div class="wrp-templates-section">
+					<h2>Saved Order Templates</h2>
+					<div class="wrp-templates-grid">
+						<?php foreach ( $templates as $template ) : ?>
+							<div class="wrp-template-card">
+								<div>
+									<strong><?php echo esc_html( $template['name'] ); ?></strong>
+									<p style="color: #6b7280; font-size: 12px;"><?php echo esc_html( $template['created_at'] ); ?> | <?php echo count( $template['items'] ); ?> items</p>
+								</div>
+								<div style="display: flex; gap: 10px;">
+									<button type="button" class="wrp-btn-primary wrp-reorder-template" data-template-id="<?php echo esc_attr( $template['id'] ); ?>">Reorder</button>
+									<button type="button" class="wrp-btn-danger wrp-delete-template" data-template-id="<?php echo esc_attr( $template['id'] ); ?>">Delete</button>
+								</div>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				</div>
+			<?php endif; ?>
 		</div>
 		<?php
 		return ob_get_clean();
+	}
+
+	public static function ajax_custom_login() {
+		check_ajax_referer( 'wrp_portal_nonce', 'nonce' );
+
+		$username = isset( $_POST['username'] ) ? sanitize_text_field( wp_unslash( $_POST['username'] ) ) : '';
+		$password = isset( $_POST['password'] ) ? $_POST['password'] : '';
+
+		if ( empty( $username ) || empty( $password ) ) {
+			wp_send_json_error( array( 'message' => 'Please enter your username and password.' ) );
+		}
+
+		$creds = array(
+			'user_login'    => $username,
+			'user_password' => $password,
+			'remember'      => true,
+		);
+
+		$user = wp_signon( $creds, false );
+
+		if ( is_wp_error( $user ) ) {
+			wp_send_json_error( array( 'message' => 'Invalid username or password.' ) );
+		}
+
+		wp_send_json_success( array( 'message' => 'Login successful. Redirecting...' ) );
 	}
 
 	public static function ajax_upload_csv() {
@@ -105,7 +209,6 @@ class WRP_Portal {
 			wp_send_json_error( array( 'message' => $results['error'] ) );
 		}
 
-		// Build HTML for results table
 		$html = '';
 		$valid_count = 0;
 		$invalid_count = 0;
@@ -129,6 +232,9 @@ class WRP_Portal {
 			$html .= '</tr>';
 		}
 
+		$transient_key = 'wrp_csv_results_' . get_current_user_id();
+		set_transient( $transient_key, $results, HOUR_IN_SECONDS );
+
 		wp_send_json_success( array(
 			'html'          => $html,
 			'valid_count'   => $valid_count,
@@ -144,21 +250,17 @@ class WRP_Portal {
 			wp_send_json_error( array( 'message' => 'Permission denied.' ) );
 		}
 
-		// Re-parse the CSV from session or re-upload
-		// For MVP simplicity, we'll re-upload the file via a hidden field
-		if ( empty( $_POST['csv_data'] ) ) {
-			wp_send_json_error( array( 'message' => 'No data to process.' ) );
-		}
+		$user_id = get_current_user_id();
+		$transient_key = 'wrp_csv_results_' . $user_id;
+		$results = get_transient( $transient_key );
 
-		$csv_data = json_decode( stripslashes( $_POST['csv_data'] ), true );
-
-		if ( ! is_array( $csv_data ) ) {
-			wp_send_json_error( array( 'message' => 'Invalid data.' ) );
+		if ( ! $results || ! is_array( $results ) ) {
+			wp_send_json_error( array( 'message' => 'No data to process. Please upload the CSV again.' ) );
 		}
 
 		$valid_rows = array();
 
-		foreach ( $csv_data as $row ) {
+		foreach ( $results as $row ) {
 			if ( 'valid' === $row['status'] ) {
 				$product_id = wc_get_product_id_by_sku( $row['sku'] );
 				if ( $product_id ) {
@@ -179,11 +281,118 @@ class WRP_Portal {
 
 		if ( $result['added'] > 0 ) {
 			wp_send_json_success( array(
-				'message' => $result['added'] . ' item(s) added to cart.',
+				'message'  => $result['added'] . ' item(s) added to cart.',
 				'cart_url' => wc_get_cart_url(),
 			) );
 		} else {
 			wp_send_json_error( array( 'message' => 'No items could be added to cart.' ) );
+		}
+	}
+
+	public static function ajax_save_template() {
+		check_ajax_referer( 'wrp_portal_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'wrp_save_templates' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission denied.' ) );
+		}
+
+		$user_id = get_current_user_id();
+		$name    = isset( $_POST['template_name'] ) ? sanitize_text_field( wp_unslash( $_POST['template_name'] ) ) : '';
+
+		if ( empty( $name ) ) {
+			wp_send_json_error( array( 'message' => 'Please enter a template name.' ) );
+		}
+
+		$transient_key = 'wrp_csv_results_' . $user_id;
+		$results = get_transient( $transient_key );
+
+		if ( ! $results || ! is_array( $results ) ) {
+			wp_send_json_error( array( 'message' => 'No data to save. Please upload the CSV again.' ) );
+		}
+
+		$saved = WRP_CSV_Handler::save_template( $user_id, $name, $results );
+
+		if ( $saved ) {
+			wp_send_json_success( array( 'message' => 'Template saved successfully!' ) );
+		} else {
+			wp_send_json_error( array( 'message' => 'Could not save template. You may have reached the 10-template limit.' ) );
+		}
+	}
+
+	public static function ajax_delete_template() {
+		check_ajax_referer( 'wrp_portal_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'wrp_save_templates' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission denied.' ) );
+		}
+
+		$user_id     = get_current_user_id();
+		$template_id = isset( $_POST['template_id'] ) ? sanitize_text_field( wp_unslash( $_POST['template_id'] ) ) : '';
+
+		if ( empty( $template_id ) ) {
+			wp_send_json_error( array( 'message' => 'Invalid template.' ) );
+		}
+
+		$deleted = WRP_CSV_Handler::delete_template( $user_id, $template_id );
+
+		if ( $deleted ) {
+			wp_send_json_success( array( 'message' => 'Template deleted.' ) );
+		} else {
+			wp_send_json_error( array( 'message' => 'Could not delete template.' ) );
+		}
+	}
+
+	public static function ajax_reorder_template() {
+		check_ajax_referer( 'wrp_portal_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'wrp_access_reorder_portal' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission denied.' ) );
+		}
+
+		$user_id     = get_current_user_id();
+		$template_id = isset( $_POST['template_id'] ) ? sanitize_text_field( wp_unslash( $_POST['template_id'] ) ) : '';
+
+		if ( empty( $template_id ) ) {
+			wp_send_json_error( array( 'message' => 'Invalid template.' ) );
+		}
+
+		$templates = WRP_CSV_Handler::get_templates( $user_id );
+
+		if ( ! isset( $templates[ $template_id ] ) ) {
+			wp_send_json_error( array( 'message' => 'Template not found.' ) );
+		}
+
+		$template = $templates[ $template_id ];
+		$valid_rows = array();
+
+		foreach ( $template['items'] as $item ) {
+			$product_id = wc_get_product_id_by_sku( $item['sku'] );
+			if ( $product_id ) {
+				$product = wc_get_product( $product_id );
+				if ( $product && $product->is_in_stock() ) {
+					$valid_rows[] = array(
+						'status'   => 'valid',
+						'sku'      => $item['sku'],
+						'quantity' => $item['quantity'],
+						'product'  => $product,
+					);
+				}
+			}
+		}
+
+		if ( empty( $valid_rows ) ) {
+			wp_send_json_error( array( 'message' => 'No items from this template are available.' ) );
+		}
+
+		$result = WRP_CSV_Handler::add_to_cart( $valid_rows );
+
+		if ( $result['added'] > 0 ) {
+			wp_send_json_success( array(
+				'message'  => $result['added'] . ' item(s) added to cart.',
+				'cart_url' => wc_get_cart_url(),
+			) );
+		} else {
+			wp_send_json_error( array( 'message' => 'Could not add items to cart.' ) );
 		}
 	}
 }

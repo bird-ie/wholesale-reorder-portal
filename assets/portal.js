@@ -1,6 +1,39 @@
 jQuery(document).ready(function($) {
 	var csvData = [];
 
+    // Custom Login Form
+	$('#wrp-login-form').on('submit', function(e) {
+		e.preventDefault();
+		var btn = $(this).find('button');
+		var msg = $('#wrp-login-message');
+
+		var username = $('#wrp_username').val();
+		var password = $('#wrp_password').val();
+
+		if (!username || !password) {
+			msg.css('color', 'red').text('Please enter username and password.');
+			return;
+		}
+
+		btn.text('Logging in...').prop('disabled', true);
+		msg.text('');
+
+		$.post(wrpAjax.ajaxUrl, {
+			action: 'wrp_custom_login',
+			nonce: wrpAjax.nonce,
+			username: username,
+			password: password
+		}, function(response) {
+			if (response.success) {
+				msg.css('color', 'green').text(response.data.message);
+				setTimeout(function() { location.reload(); }, 1000);
+			} else {
+				msg.css('color', 'red').text(response.data.message);
+				btn.text('Log In').prop('disabled', false);
+			}
+		});
+	});
+
 	// Upload CSV
 	$('#wrp-upload-btn').on('click', function() {
 		var fileInput = $('#wrp-csv-file')[0];

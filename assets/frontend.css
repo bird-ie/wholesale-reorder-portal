@@ -65,3 +65,35 @@
     margin-top: 10px;
     font-weight: bold;
 }
+
+.wrp-login-box {
+    max-width: 400px;
+    margin: 40px auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.wrp-login-box h2 {
+    margin-top: 0;
+    text-align: center;
+}
+
+.wrp-form-group {
+    margin-bottom: 15px;
+}
+
+.wrp-form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.wrp-form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
