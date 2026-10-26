@@ -17,3 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'WRP_VERSION', '1.0.0' );
 define( 'WRP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WRP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+require_once WRP_PLUGIN_DIR . 'includes/class-wrp-roles.php';
+
+function wrp_run_plugin() {
+	WRP_Roles::init();
+}
+add_action( 'plugins_loaded', 'wrp_run_plugin' );
