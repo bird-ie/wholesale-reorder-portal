@@ -1,0 +1,67 @@
+.wrp-portal {
+    max-width: 900px;
+    margin: 40px auto;
+    font-family: sans-serif;
+}
+
+.wrp-upload-box {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.wrp-btn-primary {
+    background: #111827;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.wrp-btn-success {
+    background: #10b981;
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 15px;
+}
+
+#wrp-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+#wrp-results-table th,
+#wrp-results-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.wrp-status-valid {
+    color: green;
+    font-weight: bold;
+}
+
+.wrp-status-invalid {
+    color: red;
+    font-weight: bold;
+}
+
+#wrp-upload-message,
+#wrp-cart-message {
+    margin-top: 10px;
+    font-weight: bold;
+}
